@@ -1,0 +1,14 @@
+{
+    "portfolio": [
+	{
+	    "coin": "ETH",
+	    "quantity": 2.03
+	},
+	{
+	    "coin": "FUN",
+	    "quantity": 5000
+	}
+    ],
+
+    "base_coin": "BTC"
+}
