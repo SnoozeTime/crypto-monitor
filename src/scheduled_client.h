@@ -7,12 +7,17 @@
 #include "ticker.h"
 #include <memory>
 
+#include <boost/lockfree/queue.hpp>
+
 namespace cryptom {
 
   class scheduled_client {
 
   public:
-    scheduled_client(event_base *base, const char* url, timeval duration);
+    scheduled_client(event_base *base,
+		     const char* url,
+		     timeval duration,
+		     boost::lockfree::queue<cryptom::ticker> *out_queue);
     ~scheduled_client();
 
     // no copy or assignement
@@ -45,6 +50,9 @@ namespace cryptom {
 
     // How to convert from json to ticker?
     std::unique_ptr<json_converter> converter_;
+
+    // Way to send the results. Not owned by this object
+    boost::lockfree::queue<cryptom::ticker> *out_queue_;
 
     // Send a GET request to the server.
     void execute_query();

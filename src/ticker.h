@@ -11,7 +11,8 @@ namespace cryptom {
     double close;
     double volume;
     int date;
-    std::string symbol;
+    const char* symbol;
+
   };
 
   class json_converter {

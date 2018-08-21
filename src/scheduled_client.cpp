@@ -97,10 +97,12 @@ namespace cryptom {
   }
 
 
-  scheduled_client::scheduled_client(event_base *base, const char* url, timeval duration):
+  scheduled_client::scheduled_client(event_base *base, const char* url, timeval duration,
+				     boost::lockfree::queue<cryptom::ticker> *out_queue):
     base_(base),
     duration_(duration),
-    converter_(new kucoin_converter()) {
+    converter_(new binance_converter()),
+    out_queue_(out_queue){
 
     uri_ = evhttp_uri_parse(url);
 
@@ -145,7 +147,7 @@ namespace cryptom {
   }
 
   scheduled_client::scheduled_client(scheduled_client&& other):
-    converter_(new kucoin_converter()) {
+    converter_(new binance_converter()) {
 
     // These are not owned by the other...
     base_ = other.base_;
@@ -170,6 +172,9 @@ namespace cryptom {
 
     timer_ = other.timer_;
     other.timer_ = nullptr;
+
+    out_queue_ = other.out_queue_;
+    other.out_queue_ = nullptr;
   }
 
   // Only destroy if we hold the resources...
@@ -341,11 +346,8 @@ namespace cryptom {
       }
 
       converter_->ticker_from_json(json, t);
-      std::cout << "Symbol: " << t.symbol << "\n";
-      std::cout << "close: " << t.close << "\n";
-      std::cout << "high: " << t.high << "\n";
-      std::cout << "low: " << t.low << "\n";
-      std::cout << "volume: " << t.volume << "\n";
+      while (!out_queue_->push(t))
+            ;
     }
 
     SSL_free(ssl_);

@@ -10,10 +10,16 @@
 #include <vector>
 #include <thread>
 
-const std::string base_url = "https://api.kucoin.com/v1/open/tick?symbol=";
 
-std::string create_url(std::string coin, std::string base_coin) {
-  std::string url = base_url + coin + "-" + base_coin;
+const std::string kucoin_base_url = "https://api.kucoin.com/v1/open/tick?symbol=";
+const std::string binance_base_url = "https://api.binance.com/api/v1/ticker/24hr?symbol=";
+std::string create_kurl(std::string coin, std::string base_coin) {
+  std::string url = kucoin_base_url + coin + "-" + base_coin;
+  return url;
+}
+
+std::string create_burl(std::string coin, std::string base_coin) {
+  std::string url = binance_base_url + coin + base_coin;
   return url;
 }
 
@@ -105,7 +111,7 @@ bool parse_config(const char* input_file, config& configuration) {
 }
 
 
-int io_thread(const config &config, event_base* base) {
+int io_thread(const config &config, event_base* base, boost::lockfree::queue<cryptom::ticker> *queue) {
 
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L) ||				\
   (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x20700000L)
@@ -129,9 +135,9 @@ int io_thread(const config &config, event_base* base) {
   clients.reserve(2);
 
   for (const auto& entry: config.coins) {
-    std::string url = create_url(entry.first, config.base_currency);
+    std::string url = create_burl(entry.first, config.base_currency);
     std::cout << "Will create client for " << url << std::endl;
-    clients.emplace_back(base, create_url(entry.first, config.base_currency).c_str(), duration);
+    clients.emplace_back(base, url.c_str(), duration, queue);
   }
 
   event_base_dispatch(base);
@@ -161,6 +167,10 @@ int main(int argc, char **argv) {
 
   const char *config_path = argv[1];
 
+  // Queue for communication between backend and GUI
+  // We are going to request tickers every few seconds so 128 should be large enough.
+  boost::lockfree::queue<cryptom::ticker> queue(128);
+
   config conf;
   if (parse_config(config_path, conf)) {
     for (const auto& entry: conf.coins) {
@@ -168,10 +178,23 @@ int main(int argc, char **argv) {
     }
 
     event_base *base = event_base_new();
-    std::thread communication_thread(io_thread, conf, base);
+    std::thread communication_thread(io_thread, conf, base, &queue);
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    // wait for 5 tickers
+    int nb_ticker = 0;
+    while (nb_ticker < 5) {
+      cryptom::ticker t;
+      while (queue.pop(t)) {
+	++nb_ticker;
+	std::cout << "From GUI thread\n";
 
+	std::cout << "Symbol: " << t.symbol << "\n";
+	std::cout << "close: " << t.close << "\n";
+	std::cout << "high: " << t.high << "\n";
+	std::cout << "low: " << t.low << "\n";
+	std::cout << "volume: " << t.volume << "\n";
+      }
+    }
     timeval onesec = {1, 0};
     event_base_loopexit(base, &onesec);
 
