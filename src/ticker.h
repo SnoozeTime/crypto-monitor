@@ -26,4 +26,10 @@ namespace cryptom {
   public:
     int ticker_from_json(const rapidjson::Document& json, ticker& t) const;
   };
+
+  class binance_converter: public json_converter {
+  public:
+    int ticker_from_json(const rapidjson::Document& json, ticker& t) const;
+  };
+
 }
